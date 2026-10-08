@@ -46,7 +46,7 @@ def registar_exportacao(tipo: str, utilizador: str = "anonimo"):
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO dbo.Exportacoes (Tipo, Utilizador) VALUES (?, ?)",
+            "INSERT INTO Exportacoes (Tipo, Utilizador) VALUES (?, ?)",
             tipo, utilizador
         )
         conn.commit()
@@ -61,7 +61,7 @@ def get_posts_data(limite: int = 100, fonte: Optional[str] = None,
     cursor = conn.cursor()
 
     query = """
-        SELECT TOP (?)
+        SELECT
             p.Title,
             p.Content,
             p.CreatedAt,
@@ -74,15 +74,15 @@ def get_posts_data(limite: int = 100, fonte: Optional[str] = None,
             sa.Sentiment_Score,
             ea.Dominant_Emotion,
             ta.Topic_Keywords
-        FROM [dbo].[Post] p
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
-        JOIN [dbo].[TextDocument] td ON td.Post_ID = p.Post_ID
-        LEFT JOIN [dbo].[SentimentAnalysis] sa ON td.TextDocument_ID = sa.TextDocument_ID
-        LEFT JOIN [dbo].[EmotionAnalysis] ea ON td.TextDocument_ID = ea.TextDocument_ID
-        LEFT JOIN [dbo].[TopicAssignment] ta ON td.TextDocument_ID = ta.TextDocument_ID
+        FROM Post p
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
+        JOIN TextDocument td ON td.Post_ID = p.Post_ID
+        LEFT JOIN SentimentAnalysis sa ON td.TextDocument_ID = sa.TextDocument_ID
+        LEFT JOIN EmotionAnalysis ea ON td.TextDocument_ID = ea.TextDocument_ID
+        LEFT JOIN TopicAssignment ta ON td.TextDocument_ID = ta.TextDocument_ID
         WHERE 1=1
     """
-    params = [limite]
+    params = []
 
     if fonte:
         query += " AND LOWER(sn.SNetwork_Name) = ?"
@@ -94,7 +94,8 @@ def get_posts_data(limite: int = 100, fonte: Optional[str] = None,
         query += " AND p.CreatedAt <= ?"
         params.append(data_fim)
 
-    query += " ORDER BY p.CreatedAt DESC"
+    query += " ORDER BY p.CreatedAt DESC LIMIT ?"
+    params.append(limite)
 
     cursor.execute(query, params)
     rows = cursor.fetchall()
@@ -162,7 +163,7 @@ def exportar_pdf(
     # Contar entidades
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM dbo.NamedEntity")
+    cursor.execute("SELECT COUNT(*) FROM NamedEntity")
     total_entidades = cursor.fetchone()[0]
     conn.close()
 
@@ -282,7 +283,7 @@ def exportar_bi(
     # Sentimentos
     cursor.execute("""
         SELECT sa.Sentiment_Label, COUNT(*) as total
-        FROM dbo.SentimentAnalysis sa
+        FROM SentimentAnalysis sa
         GROUP BY sa.Sentiment_Label
     """)
     sentimentos = {r[0]: r[1] for r in cursor.fetchall()}
@@ -290,7 +291,7 @@ def exportar_bi(
     # Tópicos
     cursor.execute("""
         SELECT ta.Topic_Keywords, COUNT(*) as total
-        FROM dbo.TopicAssignment ta
+        FROM TopicAssignment ta
         WHERE ta.Topic_Keywords IS NOT NULL
         GROUP BY ta.Topic_Keywords
         ORDER BY total DESC
@@ -300,21 +301,21 @@ def exportar_bi(
     # Fontes
     cursor.execute("""
         SELECT sn.SNetwork_Name, COUNT(*) as total
-        FROM dbo.Post p
-        JOIN dbo.SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
+        FROM Post p
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
         GROUP BY sn.SNetwork_Name
     """)
     fontes = [{"fonte": r[0], "total": r[1]} for r in cursor.fetchall()]
 
     # Evolução temporal
     cursor.execute("""
-        SELECT FORMAT(p.CreatedAt, 'yyyy-MM') as mes,
+        SELECT DATE_FORMAT(p.CreatedAt, '%Y-%m') as mes,
                sa.Sentiment_Label, COUNT(*) as total
-        FROM dbo.Post p
-        JOIN dbo.TextDocument td ON p.Post_ID = td.Post_ID
-        JOIN dbo.SentimentAnalysis sa ON td.TextDocument_ID = sa.TextDocument_ID
+        FROM Post p
+        JOIN TextDocument td ON p.Post_ID = td.Post_ID
+        JOIN SentimentAnalysis sa ON td.TextDocument_ID = sa.TextDocument_ID
         WHERE p.CreatedAt IS NOT NULL
-        GROUP BY FORMAT(p.CreatedAt, 'yyyy-MM'), sa.Sentiment_Label
+        GROUP BY DATE_FORMAT(p.CreatedAt, '%Y-%m'), sa.Sentiment_Label
         ORDER BY mes
     """)
     evolucao = [{"mes": r[0], "sentimento": r[1], "total": r[2]} for r in cursor.fetchall()]
@@ -365,11 +366,11 @@ def exportar_zip(
     # BI JSON
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT sa.Sentiment_Label, COUNT(*) FROM dbo.SentimentAnalysis sa GROUP BY sa.Sentiment_Label")
+    cursor.execute("SELECT sa.Sentiment_Label, COUNT(*) FROM SentimentAnalysis sa GROUP BY sa.Sentiment_Label")
     sentimentos = {r[0]: r[1] for r in cursor.fetchall()}
-    cursor.execute("SELECT ta.Topic_Keywords, COUNT(*) FROM dbo.TopicAssignment ta WHERE ta.Topic_Keywords IS NOT NULL GROUP BY ta.Topic_Keywords ORDER BY COUNT(*) DESC")
+    cursor.execute("SELECT ta.Topic_Keywords, COUNT(*) FROM TopicAssignment ta WHERE ta.Topic_Keywords IS NOT NULL GROUP BY ta.Topic_Keywords ORDER BY COUNT(*) DESC")
     topicos = [{"topico": r[0], "total": r[1]} for r in cursor.fetchall()]
-    cursor.execute("SELECT sn.SNetwork_Name, COUNT(*) FROM dbo.Post p JOIN dbo.SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID GROUP BY sn.SNetwork_Name")
+    cursor.execute("SELECT sn.SNetwork_Name, COUNT(*) FROM Post p JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID GROUP BY sn.SNetwork_Name")
     fontes = [{"fonte": r[0], "total": r[1]} for r in cursor.fetchall()]
     conn.close()
 
@@ -406,23 +407,23 @@ def get_estatisticas():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT COUNT(*) FROM dbo.Exportacoes")
+    cursor.execute("SELECT COUNT(*) FROM Exportacoes")
     total = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM dbo.Exportacoes WHERE Tipo = 'PDF'")
+    cursor.execute("SELECT COUNT(*) FROM Exportacoes WHERE Tipo = 'PDF'")
     pdfs = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM dbo.Exportacoes WHERE Tipo = 'CSV'")
+    cursor.execute("SELECT COUNT(*) FROM Exportacoes WHERE Tipo = 'CSV'")
     csvs = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM dbo.Exportacoes WHERE Tipo = 'ZIP'")
+    cursor.execute("SELECT COUNT(*) FROM Exportacoes WHERE Tipo = 'ZIP'")
     zips = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM dbo.Exportacoes WHERE Tipo = 'BI'")
+    cursor.execute("SELECT COUNT(*) FROM Exportacoes WHERE Tipo = 'BI'")
     bis = cursor.fetchone()[0]
 
     # Datasets disponíveis — número de tópicos distintos
-    cursor.execute("SELECT COUNT(DISTINCT Topic_Keywords) FROM dbo.TopicAssignment WHERE Topic_Keywords IS NOT NULL")
+    cursor.execute("SELECT COUNT(DISTINCT Topic_Keywords) FROM TopicAssignment WHERE Topic_Keywords IS NOT NULL")
     datasets = cursor.fetchone()[0]
 
     conn.close()
@@ -444,9 +445,10 @@ def get_historico(limite: int = Query(50)):
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT TOP (?) Exportacao_ID, Tipo, Utilizador, CriadaEm
-        FROM dbo.Exportacoes
+        SELECT Exportacao_ID, Tipo, Utilizador, CriadaEm
+        FROM Exportacoes
         ORDER BY CriadaEm DESC
+        LIMIT ?
     """, limite)
     rows = cursor.fetchall()
     conn.close()

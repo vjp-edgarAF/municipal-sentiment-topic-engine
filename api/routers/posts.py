@@ -54,12 +54,12 @@ def get_posts(
             ea.Active_Emotions,
             ta.Topic_ID,
             ta.Topic_Keywords
-        FROM [dbo].[Post] p
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
-        JOIN [dbo].[TextDocument] td ON td.Post_ID = p.Post_ID
-        LEFT JOIN [dbo].[SentimentAnalysis] sa ON td.TextDocument_ID = sa.TextDocument_ID
-        LEFT JOIN [dbo].[EmotionAnalysis] ea ON td.TextDocument_ID = ea.TextDocument_ID
-        LEFT JOIN [dbo].[TopicAssignment] ta ON td.TextDocument_ID = ta.TextDocument_ID
+        FROM Post p
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
+        JOIN TextDocument td ON td.Post_ID = p.Post_ID
+        LEFT JOIN SentimentAnalysis sa ON td.TextDocument_ID = sa.TextDocument_ID
+        LEFT JOIN EmotionAnalysis ea ON td.TextDocument_ID = ea.TextDocument_ID
+        LEFT JOIN TopicAssignment ta ON td.TextDocument_ID = ta.TextDocument_ID
         WHERE 1=1
     """
     params = []
@@ -87,7 +87,7 @@ def get_posts(
         query += " AND p.Source_Name LIKE ?"
         params.append(f"%{source_name}%")
 
-    query += f" ORDER BY p.CreatedAt DESC OFFSET {offset} ROWS FETCH NEXT {limite} ROWS ONLY"
+    query += f" ORDER BY p.CreatedAt DESC LIMIT {limite} OFFSET {offset}"
 
     cursor.execute(query, params)
     rows = cursor.fetchall()
@@ -125,20 +125,20 @@ def get_estatisticas():
 
     cursor.execute("""
         SELECT
-            (SELECT COUNT(*) FROM [dbo].[Post]) as total_posts,
-            (SELECT COUNT(*) FROM [dbo].[Comment]) as total_comentarios,
-            (SELECT COUNT(*) FROM [dbo].[Keyword]) as total_keywords,
-            (SELECT COUNT(*) FROM [dbo].[NamedEntity]) as total_entidades,
-            (SELECT COUNT(DISTINCT Topic_ID) FROM [dbo].[TopicAssignment] WHERE Topic_ID != -1) as total_topicos,
-            (SELECT MIN(CreatedAt) FROM [dbo].[Post] WHERE CreatedAt IS NOT NULL) as data_inicio,
-            (SELECT MAX(CreatedAt) FROM [dbo].[Post] WHERE CreatedAt IS NOT NULL) as data_fim
+            (SELECT COUNT(*) FROM Post) as total_posts,
+            (SELECT COUNT(*) FROM Comment) as total_comentarios,
+            (SELECT COUNT(*) FROM Keyword) as total_keywords,
+            (SELECT COUNT(*) FROM NamedEntity) as total_entidades,
+            (SELECT COUNT(DISTINCT Topic_ID) FROM TopicAssignment WHERE Topic_ID != -1) as total_topicos,
+            (SELECT MIN(CreatedAt) FROM Post WHERE CreatedAt IS NOT NULL) as data_inicio,
+            (SELECT MAX(CreatedAt) FROM Post WHERE CreatedAt IS NOT NULL) as data_fim
     """)
     row = cursor.fetchone()
 
     cursor.execute("""
         SELECT sn.SNetwork_Name, COUNT(*) as Total
-        FROM [dbo].[Post] p
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
+        FROM Post p
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
         GROUP BY sn.SNetwork_Name
         ORDER BY Total DESC
     """)
@@ -164,11 +164,12 @@ def get_fontes_jornalisticas(limite: int = Query(20)):
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT TOP (?) Source_Name, COUNT(*) as Total
-        FROM [dbo].[Post]
+        SELECT Source_Name, COUNT(*) as Total
+        FROM Post
         WHERE Source_Name IS NOT NULL
         GROUP BY Source_Name
         ORDER BY Total DESC
+        LIMIT ?
     """, limite)
     rows = cursor.fetchall()
     conn.close()

@@ -16,10 +16,10 @@ def get_distribuicao(
 
     query = """
         SELECT sa.Sentiment_Label, COUNT(*) as Total
-        FROM [dbo].[SentimentAnalysis] sa
-        JOIN [dbo].[TextDocument] td ON sa.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[Post] p ON td.Post_ID = p.Post_ID
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
+        FROM SentimentAnalysis sa
+        JOIN TextDocument td ON sa.TextDocument_ID = td.TextDocument_ID
+        JOIN Post p ON td.Post_ID = p.Post_ID
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
         WHERE 1=1
     """
     params = []
@@ -63,10 +63,10 @@ def get_por_fonte(
 
     query = """
         SELECT sn.SNetwork_Name, sa.Sentiment_Label, COUNT(*) as Total
-        FROM [dbo].[SentimentAnalysis] sa
-        JOIN [dbo].[TextDocument] td ON sa.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[Post] p ON td.Post_ID = p.Post_ID
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
+        FROM SentimentAnalysis sa
+        JOIN TextDocument td ON sa.TextDocument_ID = td.TextDocument_ID
+        JOIN Post p ON td.Post_ID = p.Post_ID
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
         WHERE 1=1
     """
     params = []
@@ -103,18 +103,19 @@ def get_evolucao_temporal(
     cursor = conn.cursor()
 
     if granularidade == "dia":
-        date_format = "CONVERT(VARCHAR(10), p.CreatedAt, 120)"
+        date_format = "DATE_FORMAT(p.CreatedAt, '%Y-%m-%d')"
     elif granularidade == "semana":
-        date_format = "CONCAT(YEAR(p.CreatedAt), '-W', DATEPART(ISO_WEEK, p.CreatedAt))"
+        # WEEK(..., 3) = semana ISO, como o DATEPART(ISO_WEEK) do SQL Server
+        date_format = "CONCAT(YEAR(p.CreatedAt), '-W', WEEK(p.CreatedAt, 3))"
     else:
-        date_format = "CONCAT(YEAR(p.CreatedAt), '-', RIGHT('0' + CAST(MONTH(p.CreatedAt) AS VARCHAR), 2))"
+        date_format = "DATE_FORMAT(p.CreatedAt, '%Y-%m')"
 
     query = f"""
         SELECT {date_format} as Periodo, sa.Sentiment_Label, COUNT(*) as Total
-        FROM [dbo].[SentimentAnalysis] sa
-        JOIN [dbo].[TextDocument] td ON sa.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[Post] p ON td.Post_ID = p.Post_ID
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
+        FROM SentimentAnalysis sa
+        JOIN TextDocument td ON sa.TextDocument_ID = td.TextDocument_ID
+        JOIN Post p ON td.Post_ID = p.Post_ID
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
         WHERE p.CreatedAt IS NOT NULL
     """
     params = []
@@ -152,22 +153,22 @@ def get_score_medio(
         SELECT AVG(sa.Sentiment_Score) as Score_Medio,
                MIN(sa.Sentiment_Score) as Score_Min,
                MAX(sa.Sentiment_Score) as Score_Max
-        FROM [dbo].[SentimentAnalysis] sa
-        JOIN [dbo].[TextDocument] td ON sa.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[Post] p ON td.Post_ID = p.Post_ID
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
+        FROM SentimentAnalysis sa
+        JOIN TextDocument td ON sa.TextDocument_ID = td.TextDocument_ID
+        JOIN Post p ON td.Post_ID = p.Post_ID
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
     """
     params = []
     conditions = []
 
-    if fonte:
-        from api.database import FONTE_MAP
-        query += " AND LOWER(sn.SNetwork_Name) = ?"
-        params.append(FONTE_MAP.get(fonte.lower(), fonte.lower()))
     if topico_id is not None:
-        query += " JOIN [dbo].[TopicAssignment] ta ON td.TextDocument_ID = ta.TextDocument_ID"
+        query += " JOIN TopicAssignment ta ON td.TextDocument_ID = ta.TextDocument_ID"
         conditions.append("ta.Topic_ID = ?")
         params.append(topico_id)
+    if fonte:
+        from api.database import FONTE_MAP
+        conditions.append("LOWER(sn.SNetwork_Name) = ?")
+        params.append(FONTE_MAP.get(fonte.lower(), fonte.lower()))
 
     if conditions:
         query += " WHERE " + " AND ".join(conditions)

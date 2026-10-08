@@ -19,7 +19,7 @@ def get_consultas():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT Consulta_ID, Nome, Estado, CriadaEm FROM dbo.Consultas ORDER BY CriadaEm ASC")
+    cursor.execute("SELECT Consulta_ID, Nome, Estado, CriadaEm FROM Consultas ORDER BY CriadaEm ASC")
     consultas = cursor.fetchall()
 
     resultado = []
@@ -28,7 +28,7 @@ def get_consultas():
 
         # Calcular número de resultados dinamicamente
         cursor.execute("""
-            SELECT COUNT(*) FROM dbo.Post
+            SELECT COUNT(*) FROM Post
             WHERE Title LIKE ? OR Content LIKE ?
         """, f"%{nome}%", f"%{nome}%")
         total = cursor.fetchone()[0]
@@ -52,17 +52,16 @@ def criar_consulta(body: ConsultaCreate):
     cursor = conn.cursor()
 
     # Verificar se já existe
-    cursor.execute("SELECT Consulta_ID FROM dbo.Consultas WHERE Nome = ?", body.nome)
+    cursor.execute("SELECT Consulta_ID FROM Consultas WHERE Nome = ?", body.nome)
     if cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=400, detail="Já existe uma consulta com este nome.")
 
     cursor.execute("""
-        INSERT INTO dbo.Consultas (Nome, Estado)
-        OUTPUT INSERTED.Consulta_ID
+        INSERT INTO Consultas (Nome, Estado)
         VALUES (?, 'ativa')
     """, body.nome)
-    new_id = cursor.fetchone()[0]
+    new_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
@@ -78,14 +77,14 @@ def atualizar_consulta(consulta_id: int, body: ConsultaUpdate):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT Consulta_ID FROM dbo.Consultas WHERE Consulta_ID = ?", consulta_id)
+    cursor.execute("SELECT Consulta_ID FROM Consultas WHERE Consulta_ID = ?", consulta_id)
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Consulta não encontrada.")
 
     cursor.execute("""
-        UPDATE dbo.Consultas
-        SET Estado = ?, AtualizadaEm = GETDATE()
+        UPDATE Consultas
+        SET Estado = ?, AtualizadaEm = NOW()
         WHERE Consulta_ID = ?
     """, body.estado, consulta_id)
     conn.commit()
@@ -100,12 +99,12 @@ def remover_consulta(consulta_id: int):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT Consulta_ID FROM dbo.Consultas WHERE Consulta_ID = ?", consulta_id)
+    cursor.execute("SELECT Consulta_ID FROM Consultas WHERE Consulta_ID = ?", consulta_id)
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Consulta não encontrada.")
 
-    cursor.execute("DELETE FROM dbo.Consultas WHERE Consulta_ID = ?", consulta_id)
+    cursor.execute("DELETE FROM Consultas WHERE Consulta_ID = ?", consulta_id)
     conn.commit()
     conn.close()
 

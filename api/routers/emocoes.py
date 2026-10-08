@@ -15,10 +15,10 @@ def get_distribuicao(
 
     query = """
         SELECT ea.Dominant_Emotion, COUNT(*) as Total
-        FROM [dbo].[EmotionAnalysis] ea
-        JOIN [dbo].[TextDocument] td ON ea.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[Post] p ON td.Post_ID = p.Post_ID
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
+        FROM EmotionAnalysis ea
+        JOIN TextDocument td ON ea.TextDocument_ID = td.TextDocument_ID
+        JOIN Post p ON td.Post_ID = p.Post_ID
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
         WHERE 1=1
     """
     params = []
@@ -59,31 +59,39 @@ def get_emocoes_ativas(
     conn   = get_connection()
     cursor = conn.cursor()
 
+    # Active_Emotions é texto "JOY, LOVE". Conta-se cada combinação na BD
+    # e separam-se as emoções aqui (o MySQL não tem STRING_SPLIT).
     query = """
-        SELECT value as Emocao, COUNT(*) as Total
-        FROM [dbo].[EmotionAnalysis] ea
-        JOIN [dbo].[TextDocument] td ON ea.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[Post] p ON td.Post_ID = p.Post_ID
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
-        CROSS APPLY STRING_SPLIT(ea.Active_Emotions, ',')
-        WHERE LTRIM(RTRIM(value)) != ''
+        SELECT ea.Active_Emotions, COUNT(*) as Total
+        FROM EmotionAnalysis ea
+        JOIN TextDocument td ON ea.TextDocument_ID = td.TextDocument_ID
+        JOIN Post p ON td.Post_ID = p.Post_ID
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
+        WHERE ea.Active_Emotions IS NOT NULL
     """
     params = []
 
-    if excluir_neutral:
-        query += " AND LTRIM(RTRIM(value)) != 'NEUTRAL'"
     if fonte:
         from api.database import FONTE_MAP
         query += " AND LOWER(sn.SNetwork_Name) = ?"
         params.append(FONTE_MAP.get(fonte.lower(), fonte.lower()))
 
-    query += " GROUP BY value ORDER BY Total DESC"
+    query += " GROUP BY ea.Active_Emotions"
 
     cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
 
-    return [{"emocao": r[0].strip(), "total": r[1]} for r in rows]
+    totais = {}
+    for emocoes, total in rows:
+        for emocao in emocoes.split(","):
+            emocao = emocao.strip()
+            if not emocao or (excluir_neutral and emocao == "NEUTRAL"):
+                continue
+            totais[emocao] = totais.get(emocao, 0) + total
+
+    ordenadas = sorted(totais.items(), key=lambda item: item[1], reverse=True)
+    return [{"emocao": emocao, "total": total} for emocao, total in ordenadas]
 
 
 @router.get("/por-topico")
@@ -93,9 +101,9 @@ def get_emocoes_por_topico():
 
     cursor.execute("""
         SELECT ta.Topic_ID, ea.Dominant_Emotion, COUNT(*) as Total
-        FROM [dbo].[EmotionAnalysis] ea
-        JOIN [dbo].[TextDocument] td ON ea.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[TopicAssignment] ta ON td.TextDocument_ID = ta.TextDocument_ID
+        FROM EmotionAnalysis ea
+        JOIN TextDocument td ON ea.TextDocument_ID = td.TextDocument_ID
+        JOIN TopicAssignment ta ON td.TextDocument_ID = ta.TextDocument_ID
         WHERE ta.Topic_ID != -1
         GROUP BY ta.Topic_ID, ea.Dominant_Emotion
         ORDER BY ta.Topic_ID, Total DESC

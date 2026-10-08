@@ -367,7 +367,7 @@ def gerar_ddl(tabelas, fks):
 
         creates[nome] = (
             f"CREATE TABLE {q(nome)} (\n" + ",\n".join(linhas) + "\n)"
-            " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+            " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_ci"
         )
 
         tipos = {c["nome"]: c["tipo_mysql"] for c in t["colunas"]}

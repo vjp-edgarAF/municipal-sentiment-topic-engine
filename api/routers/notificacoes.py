@@ -20,7 +20,7 @@ def get_canais():
 
     cursor.execute("""
         SELECT Email, SMS, Painel, Teams
-        FROM dbo.NotificacaoCanais
+        FROM NotificacaoCanais
         WHERE Utilizador = 'global'
     """)
     row = cursor.fetchone()
@@ -41,8 +41,8 @@ def atualizar_canais(body: CanaisUpdate):
     cursor = conn.cursor()
 
     cursor.execute("""
-        UPDATE dbo.NotificacaoCanais
-        SET Email = ?, SMS = ?, Painel = ?, Teams = ?, AtualizadaEm = GETDATE()
+        UPDATE NotificacaoCanais
+        SET Email = ?, SMS = ?, Painel = ?, Teams = ?, AtualizadaEm = NOW()
         WHERE Utilizador = 'global'
     """, int(body.email), int(body.sms), int(body.painel), int(body.teams))
     conn.commit()

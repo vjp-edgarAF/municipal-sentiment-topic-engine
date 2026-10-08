@@ -14,28 +14,29 @@ def get_mais_frequentes(
     cursor = conn.cursor()
 
     query = """
-        SELECT TOP (?) k.Keyword_Text, COUNT(*) as Total
-        FROM [dbo].[Keyword] k
-        JOIN [dbo].[TextDocument] td ON k.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[Post] p ON td.Post_ID = p.Post_ID
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
+        SELECT k.Keyword_Text, COUNT(*) as Total
+        FROM Keyword k
+        JOIN TextDocument td ON k.TextDocument_ID = td.TextDocument_ID
+        JOIN Post p ON td.Post_ID = p.Post_ID
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
     """
-    params = [limite]
+    params = []
     conditions = []
 
-    if fonte:
-        from api.database import FONTE_MAP
-        query += " AND LOWER(sn.SNetwork_Name) = ?"
-        params.append(FONTE_MAP.get(fonte.lower(), fonte.lower()))
     if topico_id is not None:
-        query += " JOIN [dbo].[TopicAssignment] ta ON td.TextDocument_ID = ta.TextDocument_ID"
+        query += " JOIN TopicAssignment ta ON td.TextDocument_ID = ta.TextDocument_ID"
         conditions.append("ta.Topic_ID = ?")
         params.append(topico_id)
+    if fonte:
+        from api.database import FONTE_MAP
+        conditions.append("LOWER(sn.SNetwork_Name) = ?")
+        params.append(FONTE_MAP.get(fonte.lower(), fonte.lower()))
 
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
 
-    query += " GROUP BY k.Keyword_Text ORDER BY Total DESC"
+    query += " GROUP BY k.Keyword_Text ORDER BY Total DESC LIMIT ?"
+    params.append(limite)
 
     cursor.execute(query, params)
     rows = cursor.fetchall()
@@ -51,9 +52,9 @@ def get_keywords_por_topico(limite: int = Query(10)):
 
     cursor.execute("""
         SELECT ta.Topic_ID, k.Keyword_Text, COUNT(*) as Total
-        FROM [dbo].[Keyword] k
-        JOIN [dbo].[TextDocument] td ON k.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[TopicAssignment] ta ON td.TextDocument_ID = ta.TextDocument_ID
+        FROM Keyword k
+        JOIN TextDocument td ON k.TextDocument_ID = td.TextDocument_ID
+        JOIN TopicAssignment ta ON td.TextDocument_ID = ta.TextDocument_ID
         WHERE ta.Topic_ID != -1
         GROUP BY ta.Topic_ID, k.Keyword_Text
         ORDER BY ta.Topic_ID, Total DESC

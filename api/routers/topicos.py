@@ -14,7 +14,7 @@ def get_topicos():
         SELECT ta.Topic_ID,
                COUNT(*) as Total,
                MAX(ta.Topic_Keywords) as Keywords
-        FROM [dbo].[TopicAssignment] ta
+        FROM TopicAssignment ta
         WHERE ta.Topic_ID != -1
         GROUP BY ta.Topic_ID
         ORDER BY Total DESC
@@ -44,7 +44,7 @@ def get_posts_por_topico(
     cursor = conn.cursor()
 
     query = """
-        SELECT TOP (?)
+        SELECT
             p.Original_External_ID,
             p.Title,
             p.CreatedAt,
@@ -53,22 +53,23 @@ def get_posts_por_topico(
             sa.Sentiment_Score,
             ea.Dominant_Emotion,
             ta.Topic_Probability
-        FROM [dbo].[TopicAssignment] ta
-        JOIN [dbo].[TextDocument] td ON ta.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[Post] p ON td.Post_ID = p.Post_ID
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
-        LEFT JOIN [dbo].[SentimentAnalysis] sa ON td.TextDocument_ID = sa.TextDocument_ID
-        LEFT JOIN [dbo].[EmotionAnalysis] ea ON td.TextDocument_ID = ea.TextDocument_ID
+        FROM TopicAssignment ta
+        JOIN TextDocument td ON ta.TextDocument_ID = td.TextDocument_ID
+        JOIN Post p ON td.Post_ID = p.Post_ID
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
+        LEFT JOIN SentimentAnalysis sa ON td.TextDocument_ID = sa.TextDocument_ID
+        LEFT JOIN EmotionAnalysis ea ON td.TextDocument_ID = ea.TextDocument_ID
         WHERE ta.Topic_ID = ?
     """
-    params = [limite, topico_id]
+    params = [topico_id]
 
     if fonte:
         from api.database import FONTE_MAP
         query += " AND LOWER(sn.SNetwork_Name) = ?"
         params.append(FONTE_MAP.get(fonte.lower(), fonte.lower()))
 
-    query += " ORDER BY ta.Topic_Probability DESC"
+    query += " ORDER BY ta.Topic_Probability DESC LIMIT ?"
+    params.append(limite)
 
     cursor.execute(query, params)
     rows = cursor.fetchall()
@@ -97,9 +98,9 @@ def get_sentimento_por_topico():
 
     cursor.execute("""
         SELECT ta.Topic_ID, sa.Sentiment_Label, COUNT(*) as Total
-        FROM [dbo].[SentimentAnalysis] sa
-        JOIN [dbo].[TextDocument] td ON sa.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[TopicAssignment] ta ON td.TextDocument_ID = ta.TextDocument_ID
+        FROM SentimentAnalysis sa
+        JOIN TextDocument td ON sa.TextDocument_ID = td.TextDocument_ID
+        JOIN TopicAssignment ta ON td.TextDocument_ID = ta.TextDocument_ID
         WHERE ta.Topic_ID != -1
         GROUP BY ta.Topic_ID, sa.Sentiment_Label
         ORDER BY ta.Topic_ID, Total DESC

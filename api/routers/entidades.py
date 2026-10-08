@@ -14,14 +14,14 @@ def get_mais_frequentes(
     cursor = conn.cursor()
 
     query = """
-        SELECT TOP (?) ne.Entity_Text, ne.Entity_Label, COUNT(*) as Total
-        FROM [dbo].[NamedEntity] ne
-        JOIN [dbo].[TextDocument] td ON ne.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[Post] p ON td.Post_ID = p.Post_ID
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
+        SELECT ne.Entity_Text, ne.Entity_Label, COUNT(*) as Total
+        FROM NamedEntity ne
+        JOIN TextDocument td ON ne.TextDocument_ID = td.TextDocument_ID
+        JOIN Post p ON td.Post_ID = p.Post_ID
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
         WHERE 1=1
     """
-    params = [limite]
+    params = []
 
     if tipo:
         query += " AND ne.Entity_Label = ?"
@@ -31,7 +31,8 @@ def get_mais_frequentes(
         query += " AND LOWER(sn.SNetwork_Name) = ?"
         params.append(FONTE_MAP.get(fonte.lower(), fonte.lower()))
 
-    query += " GROUP BY ne.Entity_Text, ne.Entity_Label ORDER BY Total DESC"
+    query += " GROUP BY ne.Entity_Text, ne.Entity_Label ORDER BY Total DESC LIMIT ?"
+    params.append(limite)
 
     cursor.execute(query, params)
     rows = cursor.fetchall()
@@ -47,10 +48,10 @@ def get_distribuicao_tipo(fonte: Optional[str] = Query(None)):
 
     query = """
         SELECT ne.Entity_Label, COUNT(*) as Total
-        FROM [dbo].[NamedEntity] ne
-        JOIN [dbo].[TextDocument] td ON ne.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[Post] p ON td.Post_ID = p.Post_ID
-        JOIN [dbo].[SocialNetwork] sn ON p.SNetwork_ID = sn.SNetwork_ID
+        FROM NamedEntity ne
+        JOIN TextDocument td ON ne.TextDocument_ID = td.TextDocument_ID
+        JOIN Post p ON td.Post_ID = p.Post_ID
+        JOIN SocialNetwork sn ON p.SNetwork_ID = sn.SNetwork_ID
         WHERE 1=1
     """
     params = []
@@ -86,14 +87,15 @@ def get_entidades_por_topico(
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT TOP (?) ne.Entity_Text, ne.Entity_Label, COUNT(*) as Total
-        FROM [dbo].[NamedEntity] ne
-        JOIN [dbo].[TextDocument] td ON ne.TextDocument_ID = td.TextDocument_ID
-        JOIN [dbo].[TopicAssignment] ta ON td.TextDocument_ID = ta.TextDocument_ID
+        SELECT ne.Entity_Text, ne.Entity_Label, COUNT(*) as Total
+        FROM NamedEntity ne
+        JOIN TextDocument td ON ne.TextDocument_ID = td.TextDocument_ID
+        JOIN TopicAssignment ta ON td.TextDocument_ID = ta.TextDocument_ID
         WHERE ta.Topic_ID = ?
         GROUP BY ne.Entity_Text, ne.Entity_Label
         ORDER BY Total DESC
-    """, limite, topico_id)
+        LIMIT ?
+    """, topico_id, limite)
     rows = cursor.fetchall()
     conn.close()
 

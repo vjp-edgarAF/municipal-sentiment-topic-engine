@@ -1,5 +1,4 @@
 import json
-import pyodbc
 from pathlib import Path
 from datetime import datetime
 from db_connection import get_connection
@@ -75,7 +74,7 @@ def get_or_create_user(cursor, handle, snetwork_id):
         return None
 
     cursor.execute(
-        "SELECT [User_ID] FROM [dbo].[UserSN] WHERE [Handle] = ? AND [SNetwork_ID] = ?",
+        "SELECT User_ID FROM UserSN WHERE Handle = ? AND SNetwork_ID = ?",
         handle, snetwork_id
     )
     row = cursor.fetchone()
@@ -84,10 +83,10 @@ def get_or_create_user(cursor, handle, snetwork_id):
         return row[0]
 
     cursor.execute(
-        "INSERT INTO [dbo].[UserSN] ([Handle], [SNetwork_ID]) OUTPUT INSERTED.[User_ID] VALUES (?, ?)",
+        "INSERT INTO UserSN (Handle, SNetwork_ID) VALUES (?, ?)",
         handle, snetwork_id
     )
-    return cursor.fetchone()[0]
+    return cursor.lastrowid
 
 
 def limpar_titulo_e_fonte(title):
@@ -111,20 +110,19 @@ def insert_post(cursor, record, snetwork_id, user_id):
     metrics = record.get("metrics", {}) or {}
 
     cursor.execute("""
-        INSERT INTO [dbo].[Post] (
-            [Original_External_ID],
-            [User_ID],
-            [SNetwork_ID],
-            [CreatedAt],
-            [Title],
-            [Content],
-            [URL],
-            [ViewCount],
-            [LikeCount],
-            [ReplyCount],
-            [Source_Name]
+        INSERT INTO Post (
+            Original_External_ID,
+            User_ID,
+            SNetwork_ID,
+            CreatedAt,
+            Title,
+            Content,
+            URL,
+            ViewCount,
+            LikeCount,
+            ReplyCount,
+            Source_Name
         )
-        OUTPUT INSERTED.[Post_ID]
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
         platform_id,
@@ -140,7 +138,7 @@ def insert_post(cursor, record, snetwork_id, user_id):
         record.get("source_name") or None,
     )
 
-    return cursor.fetchone()[0]
+    return cursor.lastrowid
 
 
 def insert_comment(cursor, comment, post_id, snetwork_id):
@@ -155,14 +153,13 @@ def insert_comment(cursor, comment, post_id, snetwork_id):
     )
 
     cursor.execute("""
-        INSERT INTO [dbo].[Comment] (
-            [Post_ID],
-            [Author_Handle],
-            [Comment_Text],
-            [Likes_Upvotes],
-            [CreatedAt]
+        INSERT INTO Comment (
+            Post_ID,
+            Author_Handle,
+            Comment_Text,
+            Likes_Upvotes,
+            CreatedAt
         )
-        OUTPUT INSERTED.[Comment_ID]
         VALUES (?, ?, ?, ?, ?)
     """,
         post_id,
@@ -176,21 +173,20 @@ def insert_comment(cursor, comment, post_id, snetwork_id):
         parse_datetime(comment.get("created_at")),
     )
 
-    return cursor.fetchone()[0]
+    return cursor.lastrowid
 
 
 def insert_text_document(cursor, post_id, snetwork_id, original_text, clean_text, created_at):
     cursor.execute("""
-        INSERT INTO [dbo].[TextDocument] (
-            [Source_Type],
-            [Post_ID],
-            [SNetwork_ID],
-            [Original_Text],
-            [Clean_Text],
-            [Municipality],
-            [CreatedAt]
+        INSERT INTO TextDocument (
+            Source_Type,
+            Post_ID,
+            SNetwork_ID,
+            Original_Text,
+            Clean_Text,
+            Municipality,
+            CreatedAt
         )
-        OUTPUT INSERTED.[TextDocument_ID]
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """,
         "POST",
@@ -202,21 +198,21 @@ def insert_text_document(cursor, post_id, snetwork_id, original_text, clean_text
         parse_datetime(created_at),
     )
 
-    return cursor.fetchone()[0]
+    return cursor.lastrowid
 
 
 def insert_sentiment(cursor, text_document_id, merged):
     cursor.execute("""
-        INSERT INTO [dbo].[SentimentAnalysis] (
-            [TextDocument_ID],
-            [Sentiment_Label],
-            [Sentiment_Score],
-            [Negative],
-            [Neutral],
-            [Positive],
-            [Comments_Polarity],
-            [Model_Name],
-            [Model_Version]
+        INSERT INTO SentimentAnalysis (
+            TextDocument_ID,
+            Sentiment_Label,
+            Sentiment_Score,
+            Negative,
+            Neutral,
+            Positive,
+            Comments_Polarity,
+            Model_Name,
+            Model_Version
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
@@ -240,14 +236,14 @@ def insert_emotion(cursor, text_document_id, merged):
     emotion_scores  = merged.get("emotion_scores", {})
 
     cursor.execute("""
-        INSERT INTO [dbo].[EmotionAnalysis] (
-            [TextDocument_ID],
-            [Dominant_Emotion],
-            [Confidence],
-            [Active_Emotions],
-            [Emotion_Scores],
-            [Model_Name],
-            [Model_Version]
+        INSERT INTO EmotionAnalysis (
+            TextDocument_ID,
+            Dominant_Emotion,
+            Confidence,
+            Active_Emotions,
+            Emotion_Scores,
+            Model_Name,
+            Model_Version
         )
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """,
@@ -264,10 +260,10 @@ def insert_emotion(cursor, text_document_id, merged):
 def insert_keywords(cursor, text_document_id, keywords):
     for kw in keywords:
         cursor.execute("""
-            INSERT INTO [dbo].[Keyword] (
-                [TextDocument_ID],
-                [Keyword_Text],
-                [Score]
+            INSERT INTO Keyword (
+                TextDocument_ID,
+                Keyword_Text,
+                Score
             )
             VALUES (?, ?, ?)
         """,
@@ -280,10 +276,10 @@ def insert_keywords(cursor, text_document_id, keywords):
 def insert_entities(cursor, text_document_id, entities):
     for entity in entities:
         cursor.execute("""
-            INSERT INTO [dbo].[NamedEntity] (
-                [TextDocument_ID],
-                [Entity_Text],
-                [Entity_Label]
+            INSERT INTO NamedEntity (
+                TextDocument_ID,
+                Entity_Text,
+                Entity_Label
             )
             VALUES (?, ?, ?)
         """,
@@ -310,17 +306,17 @@ def insert_topic(cursor, text_document_id, merged):
         topic_keywords_str = ", ".join(topic_keywords) if topic_keywords else None
 
     cursor.execute("""
-        DELETE FROM [dbo].[TopicAssignment]
-        WHERE [TextDocument_ID] = ?
+        DELETE FROM TopicAssignment
+        WHERE TextDocument_ID = ?
     """, text_document_id)
 
     cursor.execute("""
-        INSERT INTO [dbo].[TopicAssignment] (
-            [TextDocument_ID],
-            [Topic_ID],
-            [Topic_Probability],
-            [Topic_Keywords],
-            [Model_Version]
+        INSERT INTO TopicAssignment (
+            TextDocument_ID,
+            Topic_ID,
+            Topic_Probability,
+            Topic_Keywords,
+            Model_Version
         )
         VALUES (?, ?, ?, ?, ?)
     """,
@@ -334,7 +330,7 @@ def insert_topic(cursor, text_document_id, merged):
 
 def get_existing_platform_ids(cursor):
     cursor.execute(
-        "SELECT [Original_External_ID] FROM [dbo].[Post]"
+        "SELECT Original_External_ID FROM Post"
     )
     return {row[0] for row in cursor.fetchall()}
 
@@ -388,10 +384,10 @@ def main():
             if topics_record:
                 try:
                     cursor.execute("""
-                        SELECT [TextDocument_ID] FROM [dbo].[TextDocument]
-                        WHERE [Post_ID] = (
-                            SELECT [Post_ID] FROM [dbo].[Post]
-                            WHERE [Original_External_ID] = ?
+                        SELECT TextDocument_ID FROM TextDocument
+                        WHERE Post_ID = (
+                            SELECT Post_ID FROM Post
+                            WHERE Original_External_ID = ?
                         )
                     """, platform_id)
                     row = cursor.fetchone()
@@ -466,28 +462,28 @@ def main():
 
 
     print("\nVALIDAÇÃO")
-    cursor.execute("SELECT COUNT(*) FROM [dbo].[Post]")
+    cursor.execute("SELECT COUNT(*) FROM Post")
     print(f"Posts na BD:              {cursor.fetchone()[0]}")
 
-    cursor.execute("SELECT COUNT(*) FROM [dbo].[Comment]")
+    cursor.execute("SELECT COUNT(*) FROM Comment")
     print(f"Comentários na BD:        {cursor.fetchone()[0]}")
 
-    cursor.execute("SELECT COUNT(*) FROM [dbo].[TextDocument]")
+    cursor.execute("SELECT COUNT(*) FROM TextDocument")
     print(f"TextDocuments na BD:      {cursor.fetchone()[0]}")
 
-    cursor.execute("SELECT COUNT(*) FROM [dbo].[SentimentAnalysis]")
+    cursor.execute("SELECT COUNT(*) FROM SentimentAnalysis")
     print(f"Sentimentos na BD:        {cursor.fetchone()[0]}")
 
-    cursor.execute("SELECT COUNT(*) FROM [dbo].[EmotionAnalysis]")
+    cursor.execute("SELECT COUNT(*) FROM EmotionAnalysis")
     print(f"Emoções na BD:            {cursor.fetchone()[0]}")
 
-    cursor.execute("SELECT COUNT(*) FROM [dbo].[Keyword]")
+    cursor.execute("SELECT COUNT(*) FROM Keyword")
     print(f"Keywords na BD:           {cursor.fetchone()[0]}")
 
-    cursor.execute("SELECT COUNT(*) FROM [dbo].[NamedEntity]")
+    cursor.execute("SELECT COUNT(*) FROM NamedEntity")
     print(f"Entidades na BD:          {cursor.fetchone()[0]}")
 
-    cursor.execute("SELECT COUNT(*) FROM [dbo].[TopicAssignment]")
+    cursor.execute("SELECT COUNT(*) FROM TopicAssignment")
     print(f"Tópicos na BD:            {cursor.fetchone()[0]}")
 
     conn.close()

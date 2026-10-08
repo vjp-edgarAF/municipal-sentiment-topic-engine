@@ -21,7 +21,7 @@ def get_regras():
 
     cursor.execute("""
         SELECT Regra_ID, Descricao, Estado, CriadaEm
-        FROM dbo.Regras
+        FROM Regras
         ORDER BY Regra_ID ASC
     """)
     rows = cursor.fetchall()
@@ -45,17 +45,16 @@ def criar_regra(body: RegraCreate):
     cursor = conn.cursor()
 
     # Verificar duplicados
-    cursor.execute("SELECT Regra_ID FROM dbo.Regras WHERE Descricao = ?", body.descricao)
+    cursor.execute("SELECT Regra_ID FROM Regras WHERE Descricao = ?", body.descricao)
     if cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=400, detail="Já existe uma regra com esta descrição.")
 
     cursor.execute("""
-        INSERT INTO dbo.Regras (Descricao, Estado)
-        OUTPUT INSERTED.Regra_ID
+        INSERT INTO Regras (Descricao, Estado)
         VALUES (?, 'ativa')
     """, body.descricao)
-    new_id = cursor.fetchone()[0]
+    new_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
@@ -71,14 +70,14 @@ def atualizar_regra(regra_id: int, body: RegraUpdate):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT Regra_ID FROM dbo.Regras WHERE Regra_ID = ?", regra_id)
+    cursor.execute("SELECT Regra_ID FROM Regras WHERE Regra_ID = ?", regra_id)
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Regra não encontrada.")
 
     cursor.execute("""
-        UPDATE dbo.Regras
-        SET Estado = ?, AtualizadaEm = GETDATE()
+        UPDATE Regras
+        SET Estado = ?, AtualizadaEm = NOW()
         WHERE Regra_ID = ?
     """, body.estado, regra_id)
     conn.commit()
@@ -93,12 +92,12 @@ def remover_regra(regra_id: int):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT Regra_ID FROM dbo.Regras WHERE Regra_ID = ?", regra_id)
+    cursor.execute("SELECT Regra_ID FROM Regras WHERE Regra_ID = ?", regra_id)
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Regra não encontrada.")
 
-    cursor.execute("DELETE FROM dbo.Regras WHERE Regra_ID = ?", regra_id)
+    cursor.execute("DELETE FROM Regras WHERE Regra_ID = ?", regra_id)
     conn.commit()
     conn.close()
 
