@@ -3,6 +3,14 @@ on:
   repository_dispatch:
     types: [new-data-available]
   workflow_dispatch:
+  # A extração corre às 8h e 20h UTC; isto garante o processamento mesmo
+  # que o aviso (repository_dispatch) não chegue.
+  schedule:
+    - cron: "0 10,22 * * *"
+# Duas execuções em simultâneo escreveriam os mesmos ficheiros no R2.
+concurrency:
+  group: analysis-pipeline
+  cancel-in-progress: false
 jobs:
   pipeline:
     runs-on: ubuntu-latest
@@ -15,6 +23,9 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: pip install -r requirements.txt
+      # Os resultados são enviados para o R2 pelo próprio pipeline.py
+      # (já não se faz commit de data/: o all_merged.json passou dos
+      # 100 MB que o GitHub aceita).
       - name: Run pipeline
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -22,10 +33,3 @@ jobs:
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: python pipeline.py
-      - name: Commit updated outputs
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add data/
-          git commit -m "update analysis outputs - $(date +'%Y-%m-%d %H:%M')" || echo "No changes to commit"
-          git push

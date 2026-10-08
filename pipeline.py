@@ -16,6 +16,12 @@ R2_FILES = [
     "data/raw/youtube_posts.json",
 ]
 
+# Resultados do processamento (tudo em data/ exceto data/raw/).
+# Ficam no R2 e não no Git: o all_merged.json ultrapassou o limite de
+# 100 MB do GitHub e o git push passou a falhar.
+OUTPUTS_PREFIX = "data/"
+RAW_PREFIX = "data/raw/"
+
 PIPELINE_STEPS = [
     {
         "name": "Limpeza de texto",
@@ -107,6 +113,64 @@ def download_from_r2():
 
     return downloaded
 
+
+def download_outputs_from_r2():
+    """Repõe os resultados da última execução, para o processamento
+    incremental não recomeçar do zero. Se ainda não houver nada no R2
+    (primeira execução), mantêm-se os ficheiros que vieram do Git."""
+    print("=" * 60)
+    print("A DESCARREGAR RESULTADOS ANTERIORES DO R2")
+    print("=" * 60)
+
+    client = get_r2_client()
+    bucket = os.getenv("R2_BUCKET_NAME")
+
+    total = 0
+    paginator = client.get_paginator("list_objects_v2")
+
+    for page in paginator.paginate(Bucket=bucket, Prefix=OUTPUTS_PREFIX):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if key.startswith(RAW_PREFIX) or key.endswith("/"):
+                continue
+
+            local_path = BASE_DIR / key
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            client.download_file(bucket, key, str(local_path))
+            print(f"DOWNLOAD OK: {key}")
+            total += 1
+
+    if total == 0:
+        print("Nenhum resultado no R2 — a usar os ficheiros do repositório.")
+
+    return total
+
+
+def upload_outputs_to_r2():
+    print("=" * 60)
+    print("A ENVIAR RESULTADOS PARA O R2")
+    print("=" * 60)
+
+    client = get_r2_client()
+    bucket = os.getenv("R2_BUCKET_NAME")
+
+    total = 0
+    for local_path in sorted((BASE_DIR / "data").rglob("*")):
+        if not local_path.is_file():
+            continue
+
+        key = local_path.relative_to(BASE_DIR).as_posix()
+        if key.startswith(RAW_PREFIX):
+            continue
+
+        client.upload_file(str(local_path), bucket, key)
+        print(f"UPLOAD OK: {key}")
+        total += 1
+
+    print(f"\nEnviados: {total}")
+    return total
+
+
 def run_script(name, script_path):
     print(f"A CORRER: {name}")
 
@@ -141,6 +205,8 @@ def main():
 
     print(f"\n{downloaded} ficheiro(s) novo(s) — a iniciar pipeline")
 
+    download_outputs_from_r2()
+
     failed = []
 
     for step in PIPELINE_STEPS:
@@ -161,10 +227,15 @@ def main():
         print(f"Passos com erro:")
         for step in failed:
             print(f"  - {step}")
-        print("\nVerifica os erros acima antes de correr o db_insert.py")
-    else:
-        print("\nTodos os passos concluídos com sucesso.")
-        print("Podes agora correr o database/db_insert.py para inserir na BD.")
+        # Não se enviam resultados parciais para o R2: o servidor
+        # continua com os da última execução completa.
+        print("\nResultados NÃO enviados para o R2. Verifica os erros acima.")
+        sys.exit(1)
+
+    upload_outputs_to_r2()
+
+    print("\nTodos os passos concluídos com sucesso.")
+    print("O servidor descarrega os resultados do R2 na próxima atualização.")
 
 
 if __name__ == "__main__":
