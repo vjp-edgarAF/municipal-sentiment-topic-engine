@@ -1,3 +1,4 @@
+import math
 from fastapi import APIRouter, Query, Depends
 from typing import Optional
 from api.database import get_connection
@@ -7,7 +8,8 @@ from api.auth import require_admin
 def calcular_impacto_prioridade(sentiment_score, sentiment_label, likes, respostas):
     score = abs(sentiment_score) if sentiment_score else 0
     engagement = (likes or 0) + (respostas or 0) * 2
-    impacto = max(5, round(score * 100 + engagement))
+    engagement_norm = min(30, round(math.log1p(engagement) * 8))
+    impacto = max(0, min(100, round(score * 70) + engagement_norm))
 
     if sentiment_label == "NEGATIVE":
         prioridade = "Alta"

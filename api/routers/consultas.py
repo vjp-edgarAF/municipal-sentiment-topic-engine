@@ -15,34 +15,33 @@ class ConsultaUpdate(BaseModel):
 
 @router.get("/")
 def get_consultas():
-    """Lista todas as consultas com número de resultados calculado dinamicamente."""
+    """Lista todas as consultas com número de resultados calculado a partir
+    das associações reais em PostConsulta (uma só query, em vez de uma
+    contagem LIKE por consulta — isso deixava de responder com muitas
+    consultas)."""
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT Consulta_ID, Nome, Estado, CriadaEm FROM Consultas ORDER BY CriadaEm ASC")
+    cursor.execute("""
+        SELECT c.Consulta_ID, c.Nome, c.Estado, c.CriadaEm, COUNT(pc.Post_ID) AS Total
+        FROM Consultas c
+        LEFT JOIN PostConsulta pc ON pc.Consulta_ID = c.Consulta_ID
+        GROUP BY c.Consulta_ID, c.Nome, c.Estado, c.CriadaEm
+        ORDER BY c.CriadaEm ASC
+    """)
     consultas = cursor.fetchall()
-
-    resultado = []
-    for c in consultas:
-        consulta_id, nome, estado, criada_em = c
-
-        # Calcular número de resultados dinamicamente
-        cursor.execute("""
-            SELECT COUNT(*) FROM Post
-            WHERE Title LIKE ? OR Content LIKE ?
-        """, f"%{nome}%", f"%{nome}%")
-        total = cursor.fetchone()[0]
-
-        resultado.append({
-            "id": consulta_id,
-            "nome": nome,
-            "estado": estado,
-            "total_resultados": total,
-            "criada_em": str(criada_em) if criada_em else None,
-        })
-
     conn.close()
-    return resultado
+
+    return [
+        {
+            "id": c[0],
+            "nome": c[1],
+            "estado": c[2],
+            "total_resultados": c[4],
+            "criada_em": str(c[3]) if c[3] else None,
+        }
+        for c in consultas
+    ]
 
 
 @router.post("/")
@@ -104,6 +103,7 @@ def remover_consulta(consulta_id: int):
         conn.close()
         raise HTTPException(status_code=404, detail="Consulta não encontrada.")
 
+    cursor.execute("DELETE FROM PostConsulta WHERE Consulta_ID = ?", consulta_id)
     cursor.execute("DELETE FROM Consultas WHERE Consulta_ID = ?", consulta_id)
     conn.commit()
     conn.close()
