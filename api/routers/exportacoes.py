@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import math
 import zipfile
 from datetime import datetime
 from typing import Optional
@@ -29,7 +30,8 @@ MUNICIPIO = "Câmara Municipal da Covilhã"
 def calcular_impacto_prioridade(sentiment_score, sentiment_label, likes, respostas):
     score = abs(sentiment_score) if sentiment_score else 0
     engagement = (likes or 0) + (respostas or 0) * 2
-    impacto = max(5, round(score * 100 + engagement))
+    engagement_norm = min(30, round(math.log1p(engagement) * 8))
+    impacto = max(0, min(100, round(score * 70) + engagement_norm))
 
     if sentiment_label == "NEGATIVE":
         prioridade = "Alta"
